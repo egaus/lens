@@ -6,7 +6,7 @@ Lens Framework: Customizable Malware Detection
 Lens is a next generation open source malware analysis framework, built to get up and running quickly on a single system or to be deployed across a distributed environment.  Lens allows you to supplement and fully customize your organization's ability to detect malware with your own signatures, thresholds, and machine learning algorithms.  As defenders, having the ability to deploy our own custom malware detection before, during, or after a campaign can be invaluable.
 
 Installation For Linux:
-=======================
+-----------------------
 0. Yara-Python is a dependency and in order to make use of the most recent version of Yara, you may need to build from source.
 0. First install build dependencies
 ```
