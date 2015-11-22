@@ -1,5 +1,5 @@
 
-![alt tag](https://raw.github.com/egaus/lens/img/lens_logo.PNG)
+![alt tag](https://github.com/egaus/lens/blob/master/img/lens_logo.PNG)
 
 Lens Framework: Customizable Malware Detection
 ==============================================
