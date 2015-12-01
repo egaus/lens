@@ -5,6 +5,7 @@ import hashlib
 
 
 class LensFile:
+
     def __init__(self, pathToFile):
         self.name = os.path.basename(pathToFile)
         self.fullpath = os.path.abspath(pathToFile)
@@ -12,6 +13,7 @@ class LensFile:
         self.date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
         self.size = os.path.getsize(pathToFile)
         self.filetype = 'unknown'
+        self.analyzers = {}
 
     def getHashes(self):
         with open(self.fullpath) as myfile:
@@ -34,5 +36,5 @@ class LensFile:
         except AttributeError:
             print "No hash attributes"
 
-
-
+    def analyze(self):
+        """Each file type supplies its own unique analysis techniques"""
