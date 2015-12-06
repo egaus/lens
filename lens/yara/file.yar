@@ -1,0 +1,6 @@
+rule file
+    {
+        condition:
+            true
+    }
+
