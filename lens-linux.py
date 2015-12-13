@@ -148,31 +148,32 @@ class LensDaemon(Daemon):
             time.sleep(5)
             self.lens.run()
 
-    def stop(self):
-        self.lens.stop()
-        Daemon.stop(self)
-
+    def logChange(self, message):
+        self.lens.logChange(message)
 
 if __name__ == "__main__":
     daemon = LensDaemon('/tmp/daemon-example.pid')
-    daemon.init()
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            print "starting..."
-            #daemon.init()
+            print 'starting...'
+            daemon.init()
             daemon.start()
         elif 'stop' == sys.argv[1]:
-            print "stopping..."
+            print 'stopping...'
             daemon.stop()
+            daemon.init()
+            daemon.logChange('Stop service command issued, service stopped')
         elif 'restart' == sys.argv[1]:
-            #daemon.init()
+            print 'restarting...'
             daemon.restart()
+            daemon.init()
+            daemon.logChange('Restart service command issued, service restarted')
         else:
-            print "Unknown command"
+            print 'Unknown command'
             sys.exit(2)
         sys.exit(0)
 
     else:
-        print "usage: %s start|stop|restart" % sys.argv[0]
+        print 'usage: %s start|stop|restart' % sys.argv[0]
         sys.exit(2)

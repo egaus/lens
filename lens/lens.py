@@ -7,17 +7,55 @@ import ConfigParser
 import LensMongo as mdb
 import LensSqlite as sdb
 import imp
+import hashlib
+import yara
 
 
-
-def getFilesPattern(path, extension="", contains=""):
+def getFilesPattern(path, extension="", contains="", extension_exclude=None,
+                    doesnotcontain=None):
     allfiles = []
     for path, subdirs, files in os.walk(path):
         for filename in files:
             f = os.path.join(path, filename)
+            addFile = True
             if filename.endswith(extension) and filename.find(contains) >= 0:
-                allfiles.append((f, path, filename))
+                # Check excludes
+                if extension_exclude is not None:
+                    if filename.endswith(extension_exclude) > 0:
+                        addFile = False
+
+                if doesnotcontain is not None:
+                    if filename.find(doesnotcontain) > 0:
+                        addFile = False
+
+                if addFile:
+                    allfiles.append((f, path, filename))
     return allfiles
+
+def getFileHashes(pathtofile):
+    if os.path.isfile(pathtofile):
+        with open(pathtofile, 'rb') as file_to_hash:
+            filedata = file_to_hash.read()
+            md5 = hashlib.md5(filedata).hexdigest()
+            sha1 = hashlib.sha1(filedata).hexdigest()
+            sha256 = hashlib.sha256(filedata).hexdigest()
+            return (md5, sha1, sha256)
+    return None
+
+
+def yaraMatch(filename, yararules):
+    yararules.match(filename)
+    return [x.rule for x in yararules.match(filename)]
+
+
+def generateYaraIndex(indexfile, ruledir):
+    yararules = getFilesPattern(ruledir, contains=".yar",
+                                extension_exclude='index.yar')
+    f = open(indexfile, 'w')
+    for rule in yararules:
+        f.write('include "' + rule[0] + '"\n')
+    f.close()
+
 
 class Lens:
     def __init__(self):
@@ -25,9 +63,10 @@ class Lens:
         self.files = {}
         # Figure out where LENS_HOME is going to be.
         if 'LENS_HOME' not in os.environ:
-            print 'Environment variable LENS_HOME not set, assuming current \
-                working directory'
-            self.dirs['home'] = os.curdir
+            print 'Environment variable LENS_HOME not set, assuming one \
+                parent directory of this file %s is LENS_HOME' % __file__
+            self.dirs['home'] = os.path.abspath(os.path.join(
+                                os.path.dirname(__file__), os.pardir))
         else:
             self.dirs['home'] = os.environ['LENS_HOME']
 
@@ -63,6 +102,11 @@ class Lens:
             print 'Cannot find logging config %s, using default logging \
                 settings' % (self.files['logconfig'],)
         self.logger.info('Lens configuration completed successfully')
+
+        yaraindexfile = os.path.join(self.dirs['yara'], 'index.yar')
+        generateYaraIndex(yaraindexfile, self.dirs['yara'])
+        self.yararules = yara.compile(yaraindexfile)
+
 
     def loadLensConfig(self):
         self.logger.info('Attempting to load Lens configuration')
@@ -129,9 +173,8 @@ class Lens:
                                     self.analyzers[sig] = getattr(module, item)()
                                     self.logger.info('Successfully registered analyzer: %s:%s' % (filename, item))
 
-
-            # analyzer = LensAnalyzers.load_source(analyzername, path_to_analyzer)
-            # self.analyzers[analyzer.runWhenMatch()] = analyzer
+    def logChange(self, message):
+        self.logger.info(message)
 
     def findWork(self):
         self.logger.info('checking for work')
@@ -140,24 +183,37 @@ class Lens:
 
         for myfile in allFiles:
             self.logger.info('Found file %s' % (myfile[2], ))
+            self.analyzeFile(myfile[0])
 
         allUrls = getFilesPattern(self.dirs['urls'], '.txt')
         for myurl in allUrls:
             self.logger.info('Found urlfile %s' % (myurl[2], ))
+            # call function to process urlfile
+            # if there are url's to process, recommend multiprocessing
+            # for concurrent downloads
 
         allPcaps = getFilesPattern(self.dirs['pcaps'], '.pcap')
         for mypcap in allPcaps:
             self.logger.info('Found pcap %s' % (mypcap[2], ))
+            # call function to parse pcap
+            # recommend multiprocessing to speed processing of large .pcaps
 
         # check each of the three work queues and handle any new work.
+
+
+    def analyzeFile(self, pathtofile):
+        import pdb; pdb.set_trace()
+        hashes = getFileHashes(pathtofile)
+        yaramatches = yaraMatch(pathtofile, self.yararules)
+        print pathtofile
+        print hashes
+        print yaramatches
+
 
     def run(self):
         self.logger.info('running...')
         self.findWork()
         # if there is work, what kind
-
-    def stop(self):
-        self.logger.info('Lens has been stopped')
 
     def analyze(self):
         """Each file type supplies its own unique analysis techniques"""
