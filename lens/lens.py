@@ -154,24 +154,27 @@ class Lens:
     def loadAnalyzers(self):
         # https://docs.python.org/2/library/functions.html#getattr
         self.analyzers = {}
-        curanalyzers = getFilesPattern(self.dirs['analyzers'], '.py')
+        curanalyzers = getFilesPattern(self.dirs['analyzers'], extension='.py')
         for path_to_analyzer, directory, filename in curanalyzers:
             analyzername = 'analyzers.' + filename.replace('.py','')
             module = imp.load_source(analyzername, path_to_analyzer)
             for item in dir(module):
                 # ignore the internal items.
                 if not (item.startswith('__') and item.endswith('__')):
-                    details = getattr(module, item)()
-                    # If it is an analyzer, it must have these things
-                    requirements = set(['analyze', 'yara_sigs'])
-                    if set(dir(details)).intersection(requirements) == requirements:
-                        # instantiate this class because it seems to meet our
-                        # requirements of an analyzer
-                        if details.yara_sigs is not None:
-                            if len(details.yara_sigs) > 0:
-                                for sig in details.yara_sigs:
-                                    self.analyzers[sig] = getattr(module, item)()
-                                    self.logger.info('Successfully registered analyzer: %s:%s' % (filename, item))
+                    try:
+                        details = getattr(module, item)()
+                        # If it is an analyzer, it must have these things
+                        requirements = set(['analyze', 'yara_sigs'])
+                        if set(dir(details)).intersection(requirements) == requirements:
+                            # instantiate this class because it seems to meet our
+                            # requirements of an analyzer
+                            if details.yara_sigs is not None:
+                                if len(details.yara_sigs) > 0:
+                                    for sig in details.yara_sigs:
+                                        self.analyzers[sig] = getattr(module, item)()
+                                        self.logger.info('Successfully registered analyzer: %s:%s' % (filename, item))
+                    except (TypeError, AttributeError):
+                        pass
 
     def logChange(self, message):
         self.logger.info(message)
@@ -208,6 +211,10 @@ class Lens:
         print pathtofile
         print hashes
         print yaramatches
+        print self.analyzers
+        for match in yaramatches:
+            result = self.analyzers[match].analyze()
+            print result
 
 
     def run(self):

@@ -30,6 +30,13 @@ python setup.py install
 
 0. pefile - dependecy required to parse portable executable files.
 
+0. Database - either sqlite will be used or MongoDB must be installed and configured
+If using sqlite, some core functionality is supported.  To really get the full benefits of machine learning algorithms and analyzers with less structured feature output, MongoDB will be required.
 
+Installing MongoDB:
+This guide walks through how to install mongodb:
+https://docs.mongodb.org/v3.0/tutorial/install-mongodb-on-ubuntu/
+This is how to install pymongo (python package) for Windows:
+Use MS Windows installers from https://pypi.python.org/pypi/pymongo/
 
 
