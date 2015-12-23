@@ -4,12 +4,13 @@ import logging.config
 import os
 import json
 import ConfigParser
-import LensMongo as mdb
+import LensDBMongo as mdb
 import LensSqlite as sdb
 import imp
 import hashlib
 import yara
-
+from sets import Set
+import pprint
 
 def getFilesPattern(path, extension="", contains="", extension_exclude=None,
                     doesnotcontain=None):
@@ -63,8 +64,8 @@ class Lens:
         self.files = {}
         # Figure out where LENS_HOME is going to be.
         if 'LENS_HOME' not in os.environ:
-            print 'Environment variable LENS_HOME not set, assuming one \
-                parent directory of this file %s is LENS_HOME' % __file__
+            print 'Environment variable LENS_HOME not set, assuming one' + \
+                ' parent directory of this file %s is LENS_HOME' % __file__
             self.dirs['home'] = os.path.abspath(os.path.join(
                                 os.path.dirname(__file__), os.pardir))
         else:
@@ -142,7 +143,7 @@ class Lens:
                 dbport = self.config.get('database', 'dbport')
                 dbuser = self.config.get('database', 'dbuser')
                 dbpw = self.config.get('database', 'dbpw')
-                self.db = mdb.LensMongo(dbhost, dbport, dbuser, dbpw)
+                self.db = mdb.LensDBMongo(dbhost, dbport, dbuser, dbpw)
             else:
                 self.logger.critical('Loading lens config, cannot find \
                                  directory %s' % (self.dirs[option],))
@@ -154,6 +155,8 @@ class Lens:
     def loadAnalyzers(self):
         # https://docs.python.org/2/library/functions.html#getattr
         self.analyzers = {}
+        self.analyzer_sig_exclude = {}
+        self.analyzer_sig_include = {}
         curanalyzers = getFilesPattern(self.dirs['analyzers'], extension='.py')
         for path_to_analyzer, directory, filename in curanalyzers:
             analyzername = 'analyzers.' + filename.replace('.py','')
@@ -169,10 +172,22 @@ class Lens:
                             # instantiate this class because it seems to meet our
                             # requirements of an analyzer
                             if details.yara_sigs is not None:
+                                # Process Yara sigs to include
                                 if len(details.yara_sigs) > 0:
                                     for sig in details.yara_sigs:
-                                        self.analyzers[sig] = getattr(module, item)()
+                                        if sig not in self.analyzer_sig_include.keys():
+                                            self.analyzer_sig_include[sig] = []
+                                        self.analyzer_sig_include[sig].append(item)
+                                        self.analyzers[item] = getattr(module, item)()
                                         self.logger.info('Successfully registered analyzer: %s:%s' % (filename, item))
+                                # Process Yara sigs to exclude
+                                if len(details.yara_sigs_exclude) > 0:
+                                    for sig in details.yara_sigs_exclude:
+                                        if sig not in self.analyzer_sig_exclude.keys():
+                                            self.analyzer_sig_exclude[sig] = []
+                                        self.analyzer_sig_exclude[sig].append(item)
+                                        self.logger.info('Successfully excluding analyzer: %s:%s' % (filename, item))
+
                     except (TypeError, AttributeError):
                         pass
 
@@ -186,7 +201,7 @@ class Lens:
 
         for myfile in allFiles:
             self.logger.info('Found file %s' % (myfile[2], ))
-            self.analyzeFile(myfile[0])
+            self.analyzeFile(myfile)
 
         allUrls = getFilesPattern(self.dirs['urls'], '.txt')
         for myurl in allUrls:
@@ -204,17 +219,40 @@ class Lens:
         # check each of the three work queues and handle any new work.
 
 
-    def analyzeFile(self, pathtofile):
+    def analyzeFile(self, myfile):
         import pdb; pdb.set_trace()
+        pathtofile = myfile[0]
         hashes = getFileHashes(pathtofile)
         yaramatches = yaraMatch(pathtofile, self.yararules)
         print pathtofile
         print hashes
         print yaramatches
         print self.analyzers
-        for match in yaramatches:
-            result = self.analyzers[match].analyze()
-            print result
+        toRun = []
+        toExclude = []
+        for sig in yaramatches:
+            if sig in self.analyzer_sig_include.keys():
+                toRun = toRun + self.analyzer_sig_include[sig]
+            if sig in self.analyzer_sig_exclude.keys():
+                toExclude = toExclude + self.analyzer_sig_exclude[sig]
+        toRunSet = Set(toRun)
+        toRunSet.difference(Set(toExclude))
+
+        # This is single threaded, to multi-process later
+        allResults = {}
+        allResults[hashes[1]] = {}
+        allResults[hashes[1]]['filename'] = myfile[2]
+        allResults[hashes[1]]['size'] = os.stat(myfile[0]).st_size
+        allResults[hashes[1]]['path'] = myfile[1]
+        allResults[hashes[1]]['md5'] = hashes[0]
+        allResults[hashes[1]]['sha256'] = hashes[2]
+
+        for analyzer in toRunSet:
+            result = self.analyzers[analyzer].analyze(filepath=pathtofile)
+            allResults[hashes[1]][analyzer] = result
+
+        pprint.pprint(allResults)
+        self.db.insert('test', 'files',  allResults)
 
 
     def run(self):

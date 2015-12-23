@@ -27,7 +27,7 @@ class LensDBMongo:
         if self.connection is not None:
             if len(data) == 1:
                 try:
-                    result = self.connection[dbname][collection].insert_one(data)
+                    result = self.connection[dbname][collection].insert_one(data, bypass_document_validation=True)
                     if result.acknowledged:
                         count = 1
                     else:
@@ -37,7 +37,7 @@ class LensDBMongo:
                     raise e
             elif len(data) > 1:
                 try:
-                    result = self.connection[dbname][collection].insert_many(data)
+                    result = self.connection[dbname][collection].insert_many(data, check_keys=False)
                     count = len(result.inserted_ids)
                 except Exception, e:
                     count = 0
