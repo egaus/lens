@@ -4,13 +4,13 @@ import logging.config
 import os
 import json
 import ConfigParser
-import LensDBMongo as mdb
-import LensSqlite as sdb
+import LensDB as db
 import imp
 import hashlib
 import yara
 from sets import Set
 import pprint
+import datetime
 
 def getFilesPattern(path, extension="", contains="", extension_exclude=None,
                     doesnotcontain=None):
@@ -137,13 +137,13 @@ class Lens:
             self.logger.info('Loading DB %s' % (dbtype,))
             if dbtype == 'sqlite':
                 dbloc = self.config.get('database', 'sqlite_location')
-                self.db = sdb.LensSqlite(dbloc)
+                self.db = db.LensDB(dbtype, dbloc)
             elif dbtype == 'mongo':
                 dbhost = self.config.get('database', 'dbhost')
                 dbport = self.config.get('database', 'dbport')
                 dbuser = self.config.get('database', 'dbuser')
                 dbpw = self.config.get('database', 'dbpw')
-                self.db = mdb.LensDBMongo(dbhost, dbport, dbuser, dbpw)
+                self.db = db.LensDB(dbname='lens', dbtype=dbtype, host=dbhost, port=dbport, user=dbuser, pw=dbpw)
             else:
                 self.logger.critical('Loading lens config, cannot find \
                                  directory %s' % (self.dirs[option],))
@@ -159,7 +159,7 @@ class Lens:
         self.analyzer_sig_include = {}
         curanalyzers = getFilesPattern(self.dirs['analyzers'], extension='.py')
         for path_to_analyzer, directory, filename in curanalyzers:
-            analyzername = 'analyzers.' + filename.replace('.py','')
+            analyzername = 'analyzers.' + filename.replace('.py', '')
             module = imp.load_source(analyzername, path_to_analyzer)
             for item in dir(module):
                 # ignore the internal items.
@@ -169,7 +169,7 @@ class Lens:
                         # If it is an analyzer, it must have these things
                         requirements = set(['analyze', 'yara_sigs'])
                         if set(dir(details)).intersection(requirements) == requirements:
-                            # instantiate this class because it seems to meet our
+                            # instantiate class because it seems to meet our
                             # requirements of an analyzer
                             if details.yara_sigs is not None:
                                 # Process Yara sigs to include
@@ -220,7 +220,6 @@ class Lens:
 
 
     def analyzeFile(self, myfile):
-        import pdb; pdb.set_trace()
         pathtofile = myfile[0]
         hashes = getFileHashes(pathtofile)
         yaramatches = yaraMatch(pathtofile, self.yararules)
@@ -246,13 +245,14 @@ class Lens:
         allResults[hashes[1]]['path'] = myfile[1]
         allResults[hashes[1]]['md5'] = hashes[0]
         allResults[hashes[1]]['sha256'] = hashes[2]
+        allResults[hashes[1]]['dateAnalyzedUTC'] = datetime.datetime.utcnow()
 
         for analyzer in toRunSet:
             result = self.analyzers[analyzer].analyze(filepath=pathtofile)
             allResults[hashes[1]][analyzer] = result
 
         pprint.pprint(allResults)
-        self.db.insert('test', 'files',  allResults)
+        self.db.insert('files',  allResults)
 
 
     def run(self):

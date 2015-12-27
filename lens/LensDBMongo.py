@@ -3,11 +3,12 @@ from pymongo import MongoClient
 
 
 class LensDBMongo:
-    def __init__(self, host=None, port=None, user=None, pw=None):
+    def __init__(self, dbname=None, host=None, port=None, user=None, pw=None):
         self.host = host
         self.port = port
         self.user = user
         self.pw = pw
+        self.dbname = dbname
         self.connection = self.connect()
 
     def connect(self):
@@ -23,11 +24,11 @@ class LensDBMongo:
             connString = connString + ':' + self.port
         return MongoClient(connString)
 
-    def insert(self, dbname, collection, data):
+    def insert(self, collection, data):
         if self.connection is not None:
             if len(data) == 1:
                 try:
-                    result = self.connection[dbname][collection].insert_one(data, bypass_document_validation=True)
+                    result = self.connection[self.dbname][collection].insert_one(data, bypass_document_validation=True)
                     if result.acknowledged:
                         count = 1
                     else:
@@ -37,7 +38,7 @@ class LensDBMongo:
                     raise e
             elif len(data) > 1:
                 try:
-                    result = self.connection[dbname][collection].insert_many(data, check_keys=False)
+                    result = self.connection[self.dbname][collection].insert_many(data, check_keys=False)
                     count = len(result.inserted_ids)
                 except Exception, e:
                     count = 0
@@ -46,15 +47,15 @@ class LensDBMongo:
                 count = 0
         return count
 
-    def getFiles(self, dbname, collection, query=None):
+    def getFiles(self, collection, query=None):
         # greater than: {"grades.score": {"$gt": 30}}
         # logical AND: {"cuisine": "Italian", "address.zipcode": "10075"}
         # logical OR: {"$or": [{"cuisine": "Italian"}, {"address.zipcode": "10075"}]}
         if self.connection is not None:
             if query is None:
-                result = self.connection[dbname][collection].find()
+                result = self.connection[self.dbname][collection].find()
             else:
-                result = self.connection[dbname][collection].find(query)
+                result = self.connection[self.dbname][collection].find(query)
 
             for document in result:
                 print document
