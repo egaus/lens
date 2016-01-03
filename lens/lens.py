@@ -11,6 +11,7 @@ import yara
 from sets import Set
 import pprint
 import datetime
+import socket
 
 def getFilesPattern(path, extension="", contains="", extension_exclude=None,
                     doesnotcontain=None):
@@ -239,20 +240,30 @@ class Lens:
 
         # This is single threaded, to multi-process later
         allResults = {}
+        '''
         allResults[hashes[1]] = {}
         allResults[hashes[1]]['filename'] = myfile[2]
         allResults[hashes[1]]['size'] = os.stat(myfile[0]).st_size
         allResults[hashes[1]]['path'] = myfile[1]
         allResults[hashes[1]]['md5'] = hashes[0]
         allResults[hashes[1]]['sha256'] = hashes[2]
-        allResults[hashes[1]]['dateAnalyzedUTC'] = datetime.datetime.utcnow()
+                '''
+        allResults = {}
+        allResults['lastSeenFileName'] = myfile[2]
+        allResults['size'] = os.stat(myfile[0]).st_size
+        allResults['path'] = myfile[1]
+        allResults['md5'] = hashes[0]
+        allResults['sha256'] = hashes[2]
+        allResults['dateAnalyzedUTC'] = datetime.datetime.utcnow()
+        allResults['host'] = socket.gethostname()
+        key = hashes[1]
 
         for analyzer in toRunSet:
             result = self.analyzers[analyzer].analyze(filepath=pathtofile)
-            allResults[hashes[1]][analyzer] = result
+            allResults[analyzer] = result
 
         pprint.pprint(allResults)
-        self.db.insert('files',  allResults)
+        self.db.insert('files',  {key : allResults})
 
 
     def run(self):

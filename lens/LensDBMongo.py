@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 from pymongo import MongoClient
+import datetime
 
 
 class LensDBMongo:
@@ -26,9 +27,22 @@ class LensDBMongo:
 
     def insert(self, collection, data):
         if self.connection is not None:
-            if len(data) == 1:
+            # when supporting multiple writes in one DB call, use bulk_write
+            # http://api.mongodb.org/python/current/api/pymongo/collection.html#pymongo.collection.Collection.update_many
+            for key in data:
+                item = data[key]
                 try:
-                    result = self.connection[self.dbname][collection].insert_one(data, bypass_document_validation=True)
+                    # result = self.connection[self.dbname][collection].insert_one(data, bypass_document_validation=True)
+                    import pdb; pdb.set_trace()
+                    item['lastseen'] = datetime.datetime.utcnow()
+                    entryToInsert = {
+                        '$set': item,
+                        '$setOnInsert': { 'firstSeen': datetime.datetime.utcnow() },
+                        '$inc':{'timesSeen':1}
+                    }
+                    if 'lastSeenFileName' in item.keys():
+                        entryToInsert['$addToSet'] = {'filename':item['lastSeenFileName']}
+                    result = self.connection[self.dbname][collection].update_one({'_id':key}, entryToInsert, upsert=True)
                     if result.acknowledged:
                         count = 1
                     else:
@@ -36,15 +50,6 @@ class LensDBMongo:
                 except Exception, e:
                     count = 0
                     raise e
-            elif len(data) > 1:
-                try:
-                    result = self.connection[self.dbname][collection].insert_many(data, check_keys=False)
-                    count = len(result.inserted_ids)
-                except Exception, e:
-                    count = 0
-                    raise e
-            else:
-                count = 0
         return count
 
     def getFiles(self, collection, query=None):
